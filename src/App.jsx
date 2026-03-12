@@ -133,6 +133,9 @@ export default function MindWell(){
   // THERAPISTS
   const [fMode,setFMode]=useState("all");
   const [fGender,setFGender]=useState("all");
+  const [fSpec,setFSpec]=useState("all");
+  const [searchQ,setSearchQ]=useState("");
+  const [fSort,setFSort]=useState("recommended");
   const [selDoc,setSelDoc]=useState(null);
   const [sessMode,setSessMode]=useState(null);
   const [inSess,setInSess]=useState(false);
@@ -203,7 +206,17 @@ export default function MindWell(){
   const filteredDocs=THERAPISTS.filter(t=>{
     if(fMode!=="all"&&!t.modes.includes(fMode))return false;
     if(fGender!=="all"&&t.gender.toLowerCase()!==fGender)return false;
+    if(fSpec!=="all"&&!t.specs.some(s=>s.toLowerCase().includes(fSpec.toLowerCase())))return false;
+    if(searchQ.trim()){
+      const q=searchQ.toLowerCase();
+      if(!(t.name.toLowerCase().includes(q)||t.title.toLowerCase().includes(q)||t.city.toLowerCase().includes(q)||t.specs.some(s=>s.toLowerCase().includes(q))||t.lang.some(l=>l.toLowerCase().includes(q))))return false;
+    }
     return true;
+  }).sort((a,b)=>{
+    if(fSort==="rating")return b.rating-a.rating;
+    if(fSort==="price_low")return a.hourly-b.hourly;
+    if(fSort==="price_high")return b.hourly-a.hourly;
+    return b.online-a.online||b.rating-a.rating;
   });
 
   const userName=user?.name||"Friend";
@@ -621,65 +634,123 @@ export default function MindWell(){
             {/* ── THERAPISTS LIST ── */}
             {tab==="therapists"&&!selDoc&&!inSess&&!showRating&&(
               <div style={{animation:"fadeUp 0.3s ease"}}>
-                <div style={{background:T.gd,padding:"26px 18px 18px",borderRadius:"0 0 22px 22px"}}>
-                  <div style={{fontFamily:"'Lora',serif",fontSize:22,color:"#fff",fontWeight:600,marginBottom:3}}>Find Your Therapist</div>
-                  <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>18 verified Indian practitioners</div>
-                </div>
-                {/* FILTERS — fixed, no duplicate "All" */}
-                <div style={{padding:"12px 14px",borderBottom:`1px solid #E8E0F5`,background:"#fff"}}>
-                  <div style={{marginBottom:8}}>
-                    <div style={{fontSize:10,fontWeight:700,color:T.sub,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Session Mode</div>
-                    <div style={{display:"flex",gap:7}}>
-                      {[{v:"all",l:"All Modes"},{v:"chat",l:"Chat"},{v:"audio",l:"Audio"},{v:"video",l:"Video"}].map(o=>(
-                        <button key={o.v} onClick={()=>setFMode(o.v)}
-                          style={{padding:"6px 12px",borderRadius:18,border:`1.5px solid ${fMode===o.v?T.lav:"#E8E0F5"}`,background:fMode===o.v?"#EDE5FF":"#fff",color:fMode===o.v?T.lav:T.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif",whiteSpace:"nowrap"}}>
-                          {o.l}
-                        </button>
-                      ))}
+                {/* Header with search */}
+                <div style={{background:T.gd,padding:"22px 16px 16px",borderRadius:"0 0 22px 22px"}}>
+                  <div style={{fontFamily:"'Lora',serif",fontSize:22,color:"#fff",fontWeight:600,marginBottom:2}}>Find Your Therapist</div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:13}}>18 verified Indian practitioners</div>
+                  {/* SEARCH BAR */}
+                  <div style={{position:"relative"}}>
+                    <div style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:"rgba(255,255,255,0.45)",pointerEvents:"none"}}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:10,fontWeight:700,color:T.sub,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Gender</div>
-                    <div style={{display:"flex",gap:7}}>
-                      {[{v:"all",l:"Any Gender"},{v:"female",l:"Female"},{v:"male",l:"Male"}].map(o=>(
-                        <button key={o.v} onClick={()=>setFGender(o.v)}
-                          style={{padding:"6px 12px",borderRadius:18,border:`1.5px solid ${fGender===o.v?T.lav:"#E8E0F5"}`,background:fGender===o.v?"#EDE5FF":"#fff",color:fGender===o.v?T.lav:T.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif",whiteSpace:"nowrap"}}>
-                          {o.l}
-                        </button>
-                      ))}
-                    </div>
+                    <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search by name, issue, city, language..."
+                      style={{width:"100%",padding:"12px 14px 12px 38px",borderRadius:14,border:"1.5px solid rgba(255,255,255,0.15)",background:"rgba(255,255,255,0.12)",color:"#fff",fontSize:13,outline:"none",fontFamily:"'Nunito',sans-serif",backdropFilter:"blur(8px)"}}/>
+                    {searchQ&&<button onClick={()=>setSearchQ("")} style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.5)",cursor:"pointer",fontSize:17,lineHeight:1}}>×</button>}
                   </div>
                 </div>
+
+                {/* SPECIALTY CHIPS — scrollable */}
+                <div style={{background:"#fff",borderBottom:`1px solid #E8E0F5`,padding:"11px 14px 11px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:T.sub,marginBottom:7,textTransform:"uppercase",letterSpacing:1}}>I'm looking for help with</div>
+                  <div style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:3}}>
+                    {[{v:"all",l:"✨ All"},{v:"anxiety",l:"💭 Anxiety"},{v:"depression",l:"🌧 Depression"},{v:"trauma",l:"💫 Trauma"},{v:"relationships",l:"💔 Relationships"},{v:"stress",l:"🔥 Stress"},{v:"grief",l:"🕊 Grief"},{v:"addiction",l:"🔗 Addiction"},{v:"sleep",l:"😴 Sleep"},{v:"ocd",l:"🔄 OCD"},{v:"lgbtq",l:"🏳️‍🌈 LGBTQ+"},{v:"teens",l:"👦 Teens"},{v:"family",l:"🏠 Family"},{v:"anger",l:"😤 Anger"},{v:"eating",l:"💚 Eating"},{v:"work",l:"💼 Work"}].map(o=>(
+                      <button key={o.v} onClick={()=>setFSpec(o.v)}
+                        style={{padding:"6px 13px",borderRadius:18,border:`1.5px solid ${fSpec===o.v?T.lav:"#E8E0F5"}`,background:fSpec===o.v?"#EDE5FF":"#F7F4FE",color:fSpec===o.v?T.lav:T.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.2s"}}>
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* MODE / GENDER / SORT FILTERS */}
+                <div style={{background:"#fff",borderBottom:`1px solid #E8E0F5`,padding:"10px 14px"}}>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {/* Mode */}
+                    {[{v:"all",l:"All Modes"},{v:"chat",l:"💬 Chat"},{v:"audio",l:"📞 Audio"},{v:"video",l:"🎥 Video"}].map(o=>(
+                      <button key={o.v} onClick={()=>setFMode(o.v)}
+                        style={{padding:"5px 11px",borderRadius:16,border:`1.5px solid ${fMode===o.v?T.sky:"#E8E0F5"}`,background:fMode===o.v?`${T.sky}18`:"#fff",color:fMode===o.v?T.sky:T.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif",whiteSpace:"nowrap"}}>
+                        {o.l}
+                      </button>
+                    ))}
+                    {/* Gender */}
+                    {[{v:"all",l:"Any Gender"},{v:"female",l:"👩 Female"},{v:"male",l:"👨 Male"}].map(o=>(
+                      <button key={o.v} onClick={()=>setFGender(o.v)}
+                        style={{padding:"5px 11px",borderRadius:16,border:`1.5px solid ${fGender===o.v?T.mint:"#E8E0F5"}`,background:fGender===o.v?`${T.mint}18`:"#fff",color:fGender===o.v?T.mint:T.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif",whiteSpace:"nowrap"}}>
+                        {o.l}
+                      </button>
+                    ))}
+                    {/* Sort */}
+                    <select value={fSort} onChange={e=>setFSort(e.target.value)}
+                      style={{padding:"5px 11px",borderRadius:16,border:`1.5px solid #E8E0F5`,background:"#fff",color:T.sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif",outline:"none",marginLeft:"auto"}}>
+                      <option value="recommended">⭐ Recommended</option>
+                      <option value="rating">🏆 Top Rated</option>
+                      <option value="price_low">💰 Lowest Price</option>
+                      <option value="price_high">💎 Highest Price</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* RESULTS */}
                 <div style={{padding:"11px 14px"}}>
-                  <div style={{fontSize:11,color:T.sub,marginBottom:11}}>{filteredDocs.length} therapists found</div>
-                  {filteredDocs.map((t,i)=>(
-                    <div key={t.id} className="hvr" onClick={()=>setSelDoc(t)}
-                      style={{background:"#fff",borderRadius:18,padding:16,boxShadow:"0 2px 14px rgba(99,74,150,0.06)",border:`1px solid #E8E0F5`,marginBottom:11,cursor:"pointer",animation:`fadeUp 0.3s ease ${Math.min(i*0.04,0.25)}s both`}}>
-                      <div style={{display:"flex",gap:13}}>
-                        <div style={{width:56,height:56,borderRadius:17,background:`linear-gradient(135deg,${t.color},${t.color}99)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:17,flexShrink:0}}>{t.initials}</div>
-                        <div style={{flex:1}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                            <div><div style={{fontWeight:800,fontSize:14,color:T.dark}}>{t.name}</div><div style={{fontSize:10,color:T.sub}}>{t.title} · {t.city} · {t.exp}</div></div>
-                            <Badge color={t.online?T.mint:T.coral}>{t.online?"Online":"Offline"}</Badge>
-                          </div>
-                          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:7}}>
-                            {t.specs.slice(0,3).map(s=><span key={s} style={{background:`${T.lav}15`,color:T.lav,fontSize:10,padding:"2px 7px",borderRadius:6,fontWeight:600}}>{s}</span>)}
-                          </div>
-                          <div style={{display:"flex",gap:5,marginBottom:8}}>
-                            {t.modes.map(m=><span key={m} style={{display:"flex",alignItems:"center",gap:3,background:T.bg,borderRadius:7,padding:"3px 7px",fontSize:10,color:T.sub,fontWeight:600}}>
-                              {m==="chat"?Ic.chat:m==="audio"?Ic.phone:Ic.video}{m}</span>)}
-                          </div>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <div style={{display:"flex",gap:3,alignItems:"center",color:T.gold,fontSize:11,fontWeight:700}}>{Ic.star} {t.rating}<span style={{color:T.sub,fontWeight:400,fontSize:10}}>({t.reviews})</span></div>
-                            <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                              <div style={{fontWeight:900,color:T.lav,fontSize:14}}>{inr(t.hourly)}/hr</div>
-                              <button onClick={e=>{e.stopPropagation();setSelDoc(t);}} style={{background:T.g1,border:"none",borderRadius:9,padding:"6px 13px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Nunito',sans-serif"}}>Talk Now</button>
+                  {filteredDocs.length===0?(
+                    <div style={{textAlign:"center",padding:"44px 20px"}}>
+                      <div style={{fontSize:48,marginBottom:13}}>🔍</div>
+                      <div style={{fontSize:14,fontWeight:700,color:T.dark,marginBottom:6}}>No therapists found</div>
+                      <div style={{fontSize:12,color:T.sub,marginBottom:16}}>Try adjusting your search or filters</div>
+                      <Btn sm onClick={()=>{setSearchQ("");setFMode("all");setFGender("all");setFSpec("all");}}>Clear All Filters</Btn>
+                    </div>
+                  ):(
+                    <>
+                      <div style={{fontSize:11,color:T.sub,marginBottom:13}}>{filteredDocs.length} therapist{filteredDocs.length!==1?"s":""} found{searchQ?` for "${searchQ}"`:""}</div>
+                      {filteredDocs.map((t,i)=>(
+                        <div key={t.id} className="hvr" onClick={()=>setSelDoc(t)}
+                          style={{background:"#fff",borderRadius:20,boxShadow:"0 3px 18px rgba(99,74,150,0.08)",border:`1px solid #E8E0F5`,marginBottom:13,cursor:"pointer",overflow:"hidden",animation:`fadeUp 0.3s ease ${Math.min(i*0.04,0.3)}s both`}}>
+                          {/* Face-first top strip */}
+                          <div style={{background:`linear-gradient(135deg,${t.color}22,${t.color}08)`,padding:"18px 16px 14px",display:"flex",gap:14,alignItems:"flex-start"}}>
+                            {/* Big avatar */}
+                            <div style={{position:"relative",flexShrink:0}}>
+                              <div style={{width:72,height:72,borderRadius:22,background:`linear-gradient(145deg,${t.color},${t.color}99)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:22,boxShadow:`0 6px 20px ${t.color}55`}}>
+                                {t.initials}
+                              </div>
+                              {t.online&&<div style={{position:"absolute",bottom:3,right:3,width:13,height:13,borderRadius:"50%",background:T.green,border:"2.5px solid #fff"}}/>}
+                            </div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+                                <div>
+                                  <div style={{fontWeight:900,fontSize:15,color:T.dark,lineHeight:1.2}}>{t.name}</div>
+                                  <div style={{fontSize:11,color:T.sub,marginTop:2}}>{t.title}</div>
+                                  <div style={{fontSize:10,color:T.sub,marginTop:1}}>📍 {t.city} · {t.exp}</div>
+                                </div>
+                                <div style={{fontWeight:900,color:T.lav,fontSize:15,whiteSpace:"nowrap"}}>{inr(t.hourly)}<span style={{fontSize:9,fontWeight:500,color:T.sub}}>/hr</span></div>
+                              </div>
+                              <div style={{display:"flex",gap:4,marginTop:8,alignItems:"center"}}>
+                                <div style={{display:"flex",gap:2,alignItems:"center",color:T.gold,fontSize:12,fontWeight:800}}>{Ic.star} {t.rating}</div>
+                                <div style={{fontSize:10,color:T.sub}}>({t.reviews} reviews)</div>
+                                <div style={{marginLeft:"auto",display:"flex",gap:4}}>
+                                  {t.modes.map(m=><span key={m} style={{width:22,height:22,borderRadius:7,background:"rgba(255,255,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",color:T.sub}}>
+                                    {m==="chat"?<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>:m==="audio"?<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6z"/></svg>:<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>}
+                                  </span>)}
+                                </div>
+                              </div>
                             </div>
                           </div>
+                          {/* Specs + languages + CTA */}
+                          <div style={{padding:"10px 16px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                                {t.specs.slice(0,3).map(s=><span key={s} style={{background:`${t.color}15`,color:t.color,fontSize:9,padding:"3px 8px",borderRadius:7,fontWeight:700}}>{s}</span>)}
+                              </div>
+                              <div style={{fontSize:10,color:T.sub,marginTop:5}}>🗣 {t.lang.slice(0,2).join(", ")}{t.lang.length>2?` +${t.lang.length-2}`:""}</div>
+                            </div>
+                            <button onClick={e=>{e.stopPropagation();setSelDoc(t);}}
+                              style={{background:T.g1,border:"none",borderRadius:12,padding:"10px 16px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Nunito',sans-serif",whiteSpace:"nowrap",flexShrink:0}}>
+                              View Profile →
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             )}
