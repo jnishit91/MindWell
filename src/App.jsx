@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
+const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
+const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || "";
+
 const GCSS = `
   @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -166,7 +169,7 @@ export default function MindWell(){
   const aiEnd=useRef(null);
 
   // COMMUNITY
-  const [posts,setPosts]=useState(INIT_COMMUNITY);
+  const [posts,setPosts]=useState(()=>{try{const p=localStorage.getItem("mw_community");return p?JSON.parse(p):INIT_COMMUNITY;}catch{return INIT_COMMUNITY;}});
   const [newPost,setNewPost]=useState("");
   const [replyTo,setReplyTo]=useState(null);
   const [replyText,setReplyText]=useState("");
@@ -195,6 +198,7 @@ export default function MindWell(){
   useEffect(()=>{localStorage.setItem("mw_txns",JSON.stringify(txns));},[txns]);
   useEffect(()=>{localStorage.setItem("mw_journal",JSON.stringify(entries));},[entries]);
   useEffect(()=>{localStorage.setItem("mw_sessions",JSON.stringify(sessions));},[sessions]);
+  useEffect(()=>{localStorage.setItem("mw_community",JSON.stringify(posts));},[posts]);
   useEffect(()=>{if(obDone)localStorage.setItem("mw_ob","1");},[obDone]);
   useEffect(()=>{aiEnd.current?.scrollIntoView({behavior:"smooth"});},[aiMsgs]);
   useEffect(()=>{
@@ -224,10 +228,12 @@ export default function MindWell(){
   const doAuth=()=>{
     if(authMode==="signup"){
       if(!form.name.trim()||!form.phone.trim()){setAuthErr("Name and phone are required.");return;}
+      if(!/^[6-9]\d{9}$/.test(form.phone.trim())){setAuthErr("Enter a valid 10-digit Indian mobile number.");return;}
       if(!otpSent){setOtpSent(true);setAuthErr("");return;}
       setUser({name:form.name,phone:form.phone,dob:form.dob,gender:form.gender,joinDate:new Date().toLocaleDateString("en-IN")});
     } else {
       if(!form.phone.trim()){setAuthErr("Enter your phone number.");return;}
+      if(!/^[6-9]\d{9}$/.test(form.phone.trim())){setAuthErr("Enter a valid 10-digit Indian mobile number.");return;}
       if(!otpSent){setOtpSent(true);setAuthErr("");return;}
       setUser({name:"Friend",phone:form.phone,joinDate:new Date().toLocaleDateString("en-IN")});
     }
@@ -237,7 +243,7 @@ export default function MindWell(){
 
   const endSess=()=>{
     setInSess(false);
-    const cost=Math.max(50,Math.round(sessElapsed/60*(selDoc.hourly/60)));
+    const cost=Math.max(50,Math.round(Math.ceil(sessElapsed/60)*(selDoc.hourly/60)));
     setBalance(b=>Math.max(0,b-cost));
     setMins(m=>Math.max(0,m-Math.ceil(sessElapsed/60)));
     setSessions(s=>[{therapist:selDoc.name,mode:sessMode,duration:Math.ceil(sessElapsed/60),date:new Date().toLocaleDateString("en-IN"),cost},...s]);
@@ -250,10 +256,11 @@ export default function MindWell(){
     setAiMsgs(m=>[...m,{role:"user",text:txt}]);setAiLoad(true);
     try{
       const hist=aiMsgs.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}));
-      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:`You are MindBot, a warm compassionate AI mental health companion for MindWell — India's mental wellness platform. The user's name is ${userName}. Respond with genuine empathy and cultural sensitivity. 2-3 sentences max. Occasionally use warm Hindi expressions naturally (like 'yaar', 'bilkul', 'shukriya', 'haan'). Never diagnose. Gently suggest professional therapy when appropriate. Always validate feelings first.`,messages:[...hist,{role:"user",content:txt}]})});
+      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:`You are MindBot, a warm compassionate AI mental health companion for MindWell — India's mental wellness platform. The user's name is ${userName}. Respond with genuine empathy and cultural sensitivity. 2-3 sentences max. Occasionally use warm Hindi expressions naturally (like 'yaar', 'bilkul', 'shukriya', 'haan'). Never diagnose. Gently suggest professional therapy when appropriate. Always validate feelings first.`,messages:[...hist,{role:"user",content:txt}]})});
+      if(!r.ok) throw new Error(`API error: ${r.status}`);
       const d=await r.json();
       setAiMsgs(m=>[...m,{role:"assistant",text:d.content?.find(b=>b.type==="text")?.text||"Main yahan hoon. Keep sharing — I'm listening."}]);
-    }catch{setAiMsgs(m=>[...m,{role:"assistant",text:"I'm here with you. Please keep sharing — I'm listening carefully."}]);}
+    }catch(err){console.error("MindBot AI error:",err);setAiMsgs(m=>[...m,{role:"assistant",text:"I'm having trouble connecting right now. Please try again in a moment, or reach out to a therapist directly."}]);}
     setAiLoad(false);
   };
 
@@ -261,10 +268,11 @@ export default function MindWell(){
     setSumLoad(true);
     const c=aiMsgs.map(m=>`${m.role==="user"?"Patient":"AI"}: ${m.text}`).join("\n");
     try{
-      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:"Clinical briefing assistant. Use EXACTLY these bold headers: **Presenting Concerns**, **Emotional State**, **Key Themes**, **Recommended Focus Areas**. Clinical but compassionate. Max 150 words. Indian cultural context.",messages:[{role:"user",content:`Generate practitioner summary:\n\n${c}`}]})});
+      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:"Clinical briefing assistant. Use EXACTLY these bold headers: **Presenting Concerns**, **Emotional State**, **Key Themes**, **Recommended Focus Areas**. Clinical but compassionate. Max 150 words. Indian cultural context.",messages:[{role:"user",content:`Generate practitioner summary:\n\n${c}`}]})});
+      if(!r.ok) throw new Error(`API error: ${r.status}`);
       const d=await r.json();
       setSummary(d.content?.find(b=>b.type==="text")?.text||"Unable to generate.");
-    }catch{setSummary("Failed. Please try again.");}
+    }catch(err){console.error("Summary generation error:",err);setSummary("Failed to generate summary. Please check your connection and try again.");}
     setSumLoad(false);
   };
 
@@ -277,7 +285,7 @@ export default function MindWell(){
   };
   const launchRaz=(amt)=>{
     const opts={
-      key:"rzp_test_placeholder_key", // 👈 Replace with your live Razorpay key
+      key:RAZORPAY_KEY,
       amount:amt*100,currency:"INR",name:"MindWell",
       description:"Therapy Session Recharge",
       prefill:{name:user?.name||"",contact:user?.phone||""},
